@@ -6,6 +6,11 @@ LSPosed module that enables Android **Wireless debugging** with **no WiFi and no
 (GPL-3.0, by Lev Gorodetskii) — all hotspot functionality is kept, plus a
 **No-WiFi mode** switch injected into the Wireless Debugging screen.
 
+## Download
+
+Get the APK from
+[Releases](https://github.com/iflyabd/nowifi-adb/releases) (no login needed).
+
 ## Requirements
 
 - Android 15–16, Magisk + Zygisk, LSPosed (legacy Xposed API, e.g. LSPosed 1.x)
