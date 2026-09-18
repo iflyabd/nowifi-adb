@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">NoWiFi Wireless Debugging</string>
+    <string name="module_description">Enables Wireless Debugging (ADB) with no WiFi and no hotspot</string>
+</resources>
