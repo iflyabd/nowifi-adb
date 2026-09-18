@@ -74,6 +74,17 @@ Notes:
   (phone and PC on the same tailnet) or turn on the hotspot and use its IP.
 - Turning **No-WiFi mode** back OFF restores completely stock behavior.
 
+## Start on boot (optional)
+
+The Wireless Debugging screen also has a **Start on boot** switch. When ON,
+wireless debugging turns itself on after every reboot — but only if the hotspot
+is up or **No-WiFi mode** is on at that moment. Otherwise boot stays clean.
+
+> Security note: on-boot mode leaves an ADB port listening on all interfaces
+> after every reboot. Anyone on a network the phone joins (hotspot guests,
+> tailnet members) can attempt to connect — pairing authorization still applies,
+> but turn the switch OFF when you don't need it.
+
 ## Usage — hotspot mode (inherited, no router needed)
 
 1. Turn ON the WiFi **hotspot** (no upstream WiFi required).

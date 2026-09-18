@@ -27,9 +27,14 @@ object HotspotHelper {
     fun isHotspotActive(context: Context): Boolean = HotspotApi.isApEnabled(context)
 
     const val NOWIFI_KEY = "nowifi_wireless_adb"
+    const val ONBOOT_KEY = "nowifi_adb_on_boot"
 
     fun isNoWifiMode(context: Context): Boolean {
         return Settings.Global.getInt(context.contentResolver, NOWIFI_KEY, 0) == 1
+    }
+
+    fun isOnBootEnabled(context: Context): Boolean {
+        return Settings.Global.getInt(context.contentResolver, ONBOOT_KEY, 0) == 1
     }
 
     /** True when wireless debugging is allowed without a Wi-Fi client connection:

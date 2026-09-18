@@ -21,6 +21,7 @@ object SettingsHook {
     private const val TAG_WTS_RECEIVER = "hotspot_adb_receiver"
     private const val TAG_WD_OBSERVER = "hotspot_adb_fixed_visibility"
     private const val TAG_NOWIFI_OBSERVER = "nowifi_adb_observer"
+    private const val TAG_ONBOOT_OBSERVER = "nowifi_adb_onboot_observer"
 
     fun init(lpparam: XC_LoadPackage.LoadPackageParam) {
         hookIsWifiConnected(lpparam)
@@ -341,6 +342,11 @@ object SettingsHook {
                         } catch (e: Throwable) {
                             XposedBridge.log("NoWifiAdb: failed to inject No-WiFi pref: $e")
                         }
+                        try {
+                            injectOnBootPref(param.thisObject, lpparam)
+                        } catch (e: Throwable) {
+                            XposedBridge.log("NoWifiAdb: failed to inject on-boot pref: $e")
+                        }
                     }
                 },
             )
@@ -513,6 +519,77 @@ object SettingsHook {
             XposedHelpers.setAdditionalInstanceField(fragment, TAG_NOWIFI_OBSERVER, observer)
         }
         XposedBridge.log("NoWifiAdb: added No-WiFi mode toggle to Wireless Debugging")
+    }
+
+    /** "Start on boot" switch. When on, wireless debugging is enabled automatically
+     *  after every reboot (only if hotspot is up or No-WiFi mode is on). */
+    private fun injectOnBootPref(
+        fragment: Any,
+        lpparam: XC_LoadPackage.LoadPackageParam,
+    ) {
+        val screen =
+            XposedHelpers.callMethod(fragment, "getPreferenceScreen") ?: run {
+                XposedBridge.log("NoWifiAdb: WD preferenceScreen is null (onboot)")
+                return
+            }
+        if (XposedHelpers.callMethod(screen, "findPreference", HotspotHelper.ONBOOT_KEY) != null) return
+        val context = XposedHelpers.callMethod(screen, "getContext") as Context
+
+        val switchClass =
+            XposedHelpers.findClass(
+                "androidx.preference.SwitchPreferenceCompat",
+                lpparam.classLoader,
+            )
+        val pref = switchClass.getConstructor(Context::class.java).newInstance(context)
+        XposedHelpers.callMethod(pref, "setKey", HotspotHelper.ONBOOT_KEY)
+        XposedHelpers.callMethod(pref, "setTitle", "Start on boot")
+        XposedHelpers.callMethod(
+            pref,
+            "setSummary",
+            "Enable Wireless debugging automatically after reboot",
+        )
+        XposedHelpers.callMethod(pref, "setChecked", HotspotHelper.isOnBootEnabled(context))
+
+        val changeListenerClass =
+            XposedHelpers.findClass(
+                "androidx.preference.Preference\$OnPreferenceChangeListener",
+                lpparam.classLoader,
+            )
+        val changeProxy =
+            java.lang.reflect.Proxy.newProxyInstance(
+                lpparam.classLoader,
+                arrayOf(changeListenerClass),
+            ) { _, _, args ->
+                val newValue = args!![1] as Boolean
+                Settings.Global.putInt(
+                    context.contentResolver,
+                    HotspotHelper.ONBOOT_KEY,
+                    if (newValue) 1 else 0,
+                )
+                true
+            }
+        XposedHelpers.callMethod(pref, "setOnPreferenceChangeListener", changeProxy)
+        XposedHelpers.callMethod(pref, "setOrder", 1)
+        XposedHelpers.callMethod(screen, "addPreference", pref)
+
+        if (XposedHelpers.getAdditionalInstanceField(fragment, TAG_ONBOOT_OBSERVER) == null) {
+            val observer =
+                object : ContentObserver(Handler(Looper.getMainLooper())) {
+                    override fun onChange(
+                        selfChange: Boolean,
+                        uri: Uri?,
+                    ) {
+                        XposedHelpers.callMethod(pref, "setChecked", HotspotHelper.isOnBootEnabled(context))
+                    }
+                }
+            context.contentResolver.registerContentObserver(
+                Settings.Global.getUriFor(HotspotHelper.ONBOOT_KEY),
+                false,
+                observer,
+            )
+            XposedHelpers.setAdditionalInstanceField(fragment, TAG_ONBOOT_OBSERVER, observer)
+        }
+        XposedBridge.log("NoWifiAdb: added Start on boot toggle to Wireless Debugging")
     }
 
     private fun updatePrefState(
