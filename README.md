@@ -1,21 +1,24 @@
 # NoWiFi Wireless Debugging
 
 LSPosed module that enables Android **Wireless debugging** with **no WiFi and no
-hotspot** — e.g. over mobile data or Tailscale. It also keeps the original hotspot
-support. Fork of [Hotspot Wireless Debugging](https://github.com/droserasprout/io.drsr.hotspotadb)
+hotspot** — e.g. over mobile data or Tailscale — plus an optional
+**Start on boot** switch. It also keeps hotspot support. Fork of
+[Hotspot Wireless Debugging](https://github.com/droserasprout/io.drsr.hotspotadb)
 (GPL-3.0, by Lev Gorodetskii).
 
 ## Download
 
 Get the APK from [Releases](https://github.com/iflyabd/nowifi-adb/releases) —
-no login needed.
+no login needed. Latest is **v1.0.2** (stable-signed; all future updates install
+cleanly over it).
 
 ## Requirements
 
 - Android 15–16 (minSdk 33, targetSdk 36)
 - Root with Magisk (26+) and **Zygisk enabled**
-- LSPosed framework, legacy-Xposed-API build (tested: LSPosed v1.11.0 zygisk-release)
-- No router or WiFi network needed for No-WiFi mode
+- LSPosed framework, legacy-Xposed-API build — **LSPosed 1.x**
+  (tested: v1.11.0 zygisk-release). v1.3.0-style builds targeting API 101 need
+  LSPosed 2.x/Vector instead and will **not** load here.
 
 Tested on: OnePlus CPH2487, Android 16, Magisk 30.7, LSPosed v1.11.0.
 
@@ -23,7 +26,7 @@ Tested on: OnePlus CPH2487, Android 16, Magisk 30.7, LSPosed v1.11.0.
 
 1. Install LSPosed first (flash the zygisk release ZIP in Magisk → Modules,
    reboot, install the LSPosed manager APK if it isn't installed automatically).
-2. Install `nowifi-adb-*.apk` normally (tap the file → Install).
+2. Install the `app-release.apk` from Releases normally (tap the file → Install).
 3. Open the **LSPosed** manager app → **Modules** → enable
    **NoWiFi Wireless Debugging**.
 4. Open its **Scope** and tick both:
@@ -39,6 +42,10 @@ su -c 'grep NoWifiAdb /data/adb/lspd/log/modules_*.log | head'
 
 You should see `Loading legacy module dev.iflyabd.nowifiadb`,
 `hooking framework` and `hooking Settings` with no `failed` lines.
+
+> Coming from the v1.0.0 debug build? Uninstall it first — v1.0.0 was signed
+> with a throwaway debug key, so installing v1.0.2 over it fails with
+> `INSTALL_FAILED_UPDATE_INCOMPATIBLE`. Re-tick the scopes after reinstalling.
 
 ## Usage — No-WiFi mode (no WiFi, no hotspot)
 
@@ -97,7 +104,8 @@ is up or **No-WiFi mode** is on at that moment. Otherwise boot stays clean.
 ## Building from source
 
 Pushes to `main` build a debug APK via GitHub Actions (see the CI run's
-`debug-apk` artifact). Local build:
+`debug-apk` artifact). Tagged pushes (`v*`) build the stable-signed release APK
+and publish a GitHub release. Local build:
 
 ```sh
 make build    # ./gradlew assembleDebug (needs JDK 21 + Android SDK)
@@ -108,14 +116,15 @@ make build    # ./gradlew assembleDebug (needs JDK 21 + Android SDK)
 | Symptom | Fix |
 |---|---|
 | Main toggle still says “no network” | No-WiFi mode is OFF, or module/scopes not enabled, or you skipped the reboot after enabling |
-| `NoSuchMethodException … HotspotAdbModule` in LSPosed log | Wrong module build for your framework (v1.3.0 needs LSPosed 2.x/Vector API 101). Use this repo's v1.x release (legacy API) with LSPosed 1.x |
+| `INSTALL_FAILED_UPDATE_INCOMPATIBLE` | Uninstall the old debug-signed build first (see note above), then install |
+| `NoSuchMethodException … HotspotAdbModule` in LSPosed log | Wrong module build for your framework (API-101 builds need LSPosed 2.x/Vector). Use this repo's releases (legacy API) with LSPosed 1.x |
 | `adb connect` fails to shown mobile IP | Normal on carrier NAT — use `127.0.0.1:<port>` on-device, or Tailscale/hotspot IP remotely |
 | Empty port / toggle flips back after reboot | Re-check module + scopes in LSPosed manager after every reinstall |
 
 ## Other solutions
 
 - [Hotspot Wireless Debugging](https://github.com/droserasprout/io.drsr.hotspotadb)
-  (upstream of this fork — hotspot only, needs LSPosed 2.x for v1.3.0+)
+  (upstream of this fork — hotspot only)
 - [Magisk-WiFiADB](https://github.com/mrh929/magisk-wifiadb) — legacy unencrypted
   `adb tcpip` on boot, Magisk only, no LSPosed needed
 
