@@ -129,7 +129,7 @@ object SettingsHook {
                             HotspotHelper.getAnyDeviceIp()?.let { param.result = it }
                             return
                         }
-                        if (HotspotHelper.isFixedEndpointEnabled(context)) {
+                        if (HotspotHelper.isFixedIpEnabled(context)) {
                             param.result = HotspotHelper.FIXED_IP
                             return
                         }
@@ -155,7 +155,7 @@ object SettingsHook {
                     override fun afterHookedMethod(param: MethodHookParam) {
                         try {
                             val app = currentApplication() ?: return
-                            if (!HotspotHelper.isFixedEndpointEnabled(app)) return
+                            if (!HotspotHelper.isFixedPortEnabled(app)) return
                             if (!HotspotHelper.isAdbWifiEnabled(app)) return
                             param.result = HotspotHelper.FIXED_PORT
                         } catch (e: Throwable) {
@@ -286,7 +286,12 @@ object SettingsHook {
             val resolver = context.contentResolver
             resolver.registerContentObserver(Settings.Global.getUriFor(HotspotHelper.ADB_WIFI_ENABLED), false, observer)
             resolver.registerContentObserver(
-                Settings.Global.getUriFor(HotspotHelper.FIXED_ENDPOINT_KEY),
+                Settings.Global.getUriFor(HotspotHelper.FIXED_IP_KEY),
+                false,
+                observer,
+            )
+            resolver.registerContentObserver(
+                Settings.Global.getUriFor(HotspotHelper.FIXED_PORT_KEY),
                 false,
                 observer,
             )
@@ -333,7 +338,7 @@ object SettingsHook {
                     override fun afterHookedMethod(param: MethodHookParam) {
                         if (param.thisObject.javaClass.name != fragmentClassName) return
                         try {
-                            injectFixedEndpointPref(param.thisObject, lpparam)
+                            injectFixedSwitchesPref(param.thisObject, lpparam)
                         } catch (e: Throwable) {
                             XposedBridge.log("NoWifiAdb: failed to inject fixed endpoint pref: $e")
                         }
@@ -355,7 +360,9 @@ object SettingsHook {
         }
     }
 
-    private fun injectFixedEndpointPref(
+    /** Two independent switches on the Wireless Debugging screen: Fixed IP
+     *  (always use 192.168.49.1) and Fixed port (always use 5555). */
+    private fun injectFixedSwitchesPref(
         fragment: Any,
         lpparam: XC_LoadPackage.LoadPackageParam,
     ) {
@@ -364,52 +371,32 @@ object SettingsHook {
                 XposedBridge.log("NoWifiAdb: WD preferenceScreen is null")
                 return
             }
-        if (XposedHelpers.callMethod(screen, "findPreference", HotspotHelper.FIXED_ENDPOINT_KEY) != null) return
         val context = XposedHelpers.callMethod(screen, "getContext") as Context
 
-        val switchClass =
-            XposedHelpers.findClass(
-                "androidx.preference.SwitchPreferenceCompat",
-                lpparam.classLoader,
-            )
-        val pref = switchClass.getConstructor(Context::class.java).newInstance(context)
-        XposedHelpers.callMethod(pref, "setKey", HotspotHelper.FIXED_ENDPOINT_KEY)
-        XposedHelpers.callMethod(pref, "setTitle", "Fixed IP/port")
-        XposedHelpers.callMethod(
-            pref,
-            "setSummary",
-            "Use ${HotspotHelper.FIXED_IP}:${HotspotHelper.FIXED_PORT}",
-        )
-        XposedHelpers.callMethod(pref, "setChecked", HotspotHelper.isFixedEndpointEnabled(context))
-        XposedHelpers.callMethod(pref, "setVisible", HotspotHelper.isAdbWifiEnabled(context))
+        val added = mutableListOf<Any>()
+        addFixedSwitch(
+            fragment,
+            lpparam,
+            screen,
+            context,
+            HotspotHelper.FIXED_IP_KEY,
+            "Fixed IP",
+            "Always use ${HotspotHelper.FIXED_IP}",
+            HotspotHelper.isFixedIpEnabled(context),
+        )?.let { added += it }
+        addFixedSwitch(
+            fragment,
+            lpparam,
+            screen,
+            context,
+            HotspotHelper.FIXED_PORT_KEY,
+            "Fixed port",
+            "Always use ${HotspotHelper.FIXED_PORT}",
+            HotspotHelper.isFixedPortEnabled(context),
+        )?.let { added += it }
+        if (added.isEmpty()) return
 
-        val changeListenerClass =
-            XposedHelpers.findClass(
-                "androidx.preference.Preference\$OnPreferenceChangeListener",
-                lpparam.classLoader,
-            )
-        val changeProxy =
-            java.lang.reflect.Proxy.newProxyInstance(
-                lpparam.classLoader,
-                arrayOf(changeListenerClass),
-            ) { _, _, args ->
-                val newValue = args!![1] as Boolean
-                Settings.Global.putInt(
-                    context.contentResolver,
-                    HotspotHelper.FIXED_ENDPOINT_KEY,
-                    if (newValue) 1 else 0,
-                )
-                // Refresh the IP/Port row above so it re-reads our getIpv4Address hook.
-                try {
-                    XposedHelpers.callMethod(fragment, "updatePreferenceStates")
-                } catch (e: Throwable) {
-                    XposedBridge.log("NoWifiAdb: updatePreferenceStates failed: $e")
-                }
-                true
-            }
-        XposedHelpers.callMethod(pref, "setOnPreferenceChangeListener", changeProxy)
-
-        // Place the toggle right after the IP/Port row. Resolve by the "adb_ip_addr_pref"
+        // Place the toggles right after the IP/Port row. Resolve by the "adb_ip_addr_pref"
         // key (present A11–A14, A16) when possible, else default to index 0 (A15, which
         // reorganized the fragment and left the IP row keyless).
         val count = XposedHelpers.callMethod(screen, "getPreferenceCount") as Int
@@ -426,8 +413,10 @@ object SettingsHook {
             val newOrder = if (i <= targetIndex) i else i + 1
             XposedHelpers.callMethod(p, "setOrder", newOrder)
         }
-        XposedHelpers.callMethod(pref, "setOrder", targetIndex + 1)
-        XposedHelpers.callMethod(screen, "addPreference", pref)
+        added.forEachIndexed { index, pref ->
+            XposedHelpers.callMethod(pref, "setOrder", targetIndex + 1 + index)
+            XposedHelpers.callMethod(screen, "addPreference", pref)
+        }
 
         // Toggle visibility with the main Wireless Debugging switch on this screen.
         if (XposedHelpers.getAdditionalInstanceField(fragment, TAG_WD_OBSERVER) == null) {
@@ -437,7 +426,10 @@ object SettingsHook {
                         selfChange: Boolean,
                         uri: Uri?,
                     ) {
-                        XposedHelpers.callMethod(pref, "setVisible", HotspotHelper.isAdbWifiEnabled(context))
+                        val visible = HotspotHelper.isAdbWifiEnabled(context)
+                        for (pref in added) {
+                            XposedHelpers.callMethod(pref, "setVisible", visible)
+                        }
                     }
                 }
             context.contentResolver.registerContentObserver(
@@ -447,7 +439,60 @@ object SettingsHook {
             )
             XposedHelpers.setAdditionalInstanceField(fragment, TAG_WD_OBSERVER, observer)
         }
-        XposedBridge.log("NoWifiAdb: added Fixed IP/port toggle to Wireless Debugging")
+        XposedBridge.log("NoWifiAdb: added Fixed IP / Fixed port toggles to Wireless Debugging")
+    }
+
+    /** Creates one fixed switch pref, or returns null if it already exists. */
+    private fun addFixedSwitch(
+        fragment: Any,
+        lpparam: XC_LoadPackage.LoadPackageParam,
+        screen: Any,
+        context: Context,
+        key: String,
+        title: String,
+        summary: String,
+        checked: Boolean,
+    ): Any? {
+        if (XposedHelpers.callMethod(screen, "findPreference", key) != null) return null
+
+        val switchClass =
+            XposedHelpers.findClass(
+                "androidx.preference.SwitchPreferenceCompat",
+                lpparam.classLoader,
+            )
+        val pref = switchClass.getConstructor(Context::class.java).newInstance(context)
+        XposedHelpers.callMethod(pref, "setKey", key)
+        XposedHelpers.callMethod(pref, "setTitle", title)
+        XposedHelpers.callMethod(pref, "setSummary", summary)
+        XposedHelpers.callMethod(pref, "setChecked", checked)
+        XposedHelpers.callMethod(pref, "setVisible", HotspotHelper.isAdbWifiEnabled(context))
+
+        val changeListenerClass =
+            XposedHelpers.findClass(
+                "androidx.preference.Preference\$OnPreferenceChangeListener",
+                lpparam.classLoader,
+            )
+        val changeProxy =
+            java.lang.reflect.Proxy.newProxyInstance(
+                lpparam.classLoader,
+                arrayOf(changeListenerClass),
+            ) { _, _, args ->
+                val newValue = args!![1] as Boolean
+                Settings.Global.putInt(
+                    context.contentResolver,
+                    key,
+                    if (newValue) 1 else 0,
+                )
+                // Refresh the IP/Port row above so it re-reads our hooks.
+                try {
+                    XposedHelpers.callMethod(fragment, "updatePreferenceStates")
+                } catch (e: Throwable) {
+                    XposedBridge.log("NoWifiAdb: updatePreferenceStates failed: $e")
+                }
+                true
+            }
+        XposedHelpers.callMethod(pref, "setOnPreferenceChangeListener", changeProxy)
+        return pref
     }
 
     /** No-WiFi mode switch, always visible on the Wireless Debugging screen. When on,
@@ -606,14 +651,20 @@ object SettingsHook {
         enabled: Boolean,
     ): String {
         if (!enabled) return ""
-        if (HotspotHelper.isFixedEndpointEnabled(context)) {
-            return "${HotspotHelper.FIXED_IP}:${HotspotHelper.FIXED_PORT}"
-        }
         val ip =
-            HotspotHelper.getHotspotIpAddress(context)
-                ?: HotspotHelper.getAnyWlanIp()
-                ?: return ""
-        val port = HotspotHelper.getAdbWirelessPort()
+            if (HotspotHelper.isFixedIpEnabled(context)) {
+                HotspotHelper.FIXED_IP
+            } else {
+                HotspotHelper.getHotspotIpAddress(context)
+                    ?: HotspotHelper.getAnyWlanIp()
+                    ?: return ""
+            }
+        val port =
+            if (HotspotHelper.isFixedPortEnabled(context)) {
+                HotspotHelper.FIXED_PORT
+            } else {
+                HotspotHelper.getAdbWirelessPort()
+            }
         return if (port > 0) "$ip:$port" else ip
     }
 }

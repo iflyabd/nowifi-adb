@@ -9,13 +9,18 @@ import java.net.Inet4Address
 import java.net.NetworkInterface
 
 object HotspotHelper {
-    const val FIXED_ENDPOINT_KEY = "hotspot_adb_fixed_endpoint"
+    const val FIXED_IP_KEY = "nowifi_fixed_ip"
+    const val FIXED_PORT_KEY = "nowifi_fixed_port"
     const val ADB_WIFI_ENABLED = "adb_wifi_enabled"
     const val FIXED_IP = "192.168.49.1"
     const val FIXED_PORT = 5555
 
-    fun isFixedEndpointEnabled(context: Context): Boolean {
-        return Settings.Global.getInt(context.contentResolver, FIXED_ENDPOINT_KEY, 0) == 1
+    fun isFixedIpEnabled(context: Context): Boolean {
+        return Settings.Global.getInt(context.contentResolver, FIXED_IP_KEY, 0) == 1
+    }
+
+    fun isFixedPortEnabled(context: Context): Boolean {
+        return Settings.Global.getInt(context.contentResolver, FIXED_PORT_KEY, 0) == 1
     }
 
     fun isAdbWifiEnabled(context: Context): Boolean {

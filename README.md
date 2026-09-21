@@ -98,8 +98,10 @@ is up or **No-WiFi mode** is on at that moment. Otherwise boot stays clean.
 2. Use the **Wireless debugging** toggle in hotspot settings or Developer options.
 3. Pair once (`adb pair <hotspot-ip>:<pairing-port>`), then
    `adb connect <hotspot-ip>:<port>`.
-4. Optional: enable **Fixed IP/port** on the Wireless Debugging screen to always
-   use `192.168.49.1:5555` (pairing still uses the one-time dynamic port).
+4. Optional: enable **Fixed IP** (always show `192.168.49.1`) and/or
+   **Fixed port** (always use `5555` via a system_server TCP proxy, TLS
+   preserved end-to-end) on the Wireless Debugging screen. Both need the
+   hotspot up to take effect; pairing still uses the one-time dynamic port.
 
 ## Building from source
 

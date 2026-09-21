@@ -164,7 +164,12 @@ object FrameworkHook {
                         }
                     }
                 resolver.registerContentObserver(
-                    Settings.Global.getUriFor(HotspotHelper.FIXED_ENDPOINT_KEY),
+                    Settings.Global.getUriFor(HotspotHelper.FIXED_IP_KEY),
+                    false,
+                    observer,
+                )
+                resolver.registerContentObserver(
+                    Settings.Global.getUriFor(HotspotHelper.FIXED_PORT_KEY),
                     false,
                     observer,
                 )
@@ -184,12 +189,13 @@ object FrameworkHook {
     private fun evaluateProxy(context: Context) {
         try {
             val hotspot = HotspotHelper.isHotspotActive(context)
-            val fixed = HotspotHelper.isFixedEndpointEnabled(context)
+            val fixedIp = HotspotHelper.isFixedIpEnabled(context)
+            val fixedPort = HotspotHelper.isFixedPortEnabled(context)
             val adb = HotspotHelper.isAdbWifiEnabled(context)
 
-            if (hotspot && fixed) SubnetAlias.apply(context) else SubnetAlias.remove()
+            if (hotspot && fixedIp) SubnetAlias.apply(context) else SubnetAlias.remove()
 
-            if (hotspot && fixed && adb) {
+            if (hotspot && fixedPort && adb) {
                 val realPort = HotspotHelper.getAdbWirelessPort()
                 if (realPort > 0) AdbPortProxy.start(realPort) else AdbPortProxy.stop()
             } else {
