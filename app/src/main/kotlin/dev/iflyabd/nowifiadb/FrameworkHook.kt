@@ -195,7 +195,9 @@ object FrameworkHook {
 
             if (hotspot && fixedIp) SubnetAlias.apply(context) else SubnetAlias.remove()
 
-            if (hotspot && fixedPort && adb) {
+            // The port proxy needs no hotspot: it binds 0.0.0.0 and forwards
+            // to adbd's TLS port on any interface (localhost, Tailscale...).
+            if (fixedPort && adb) {
                 val realPort = HotspotHelper.getAdbWirelessPort()
                 if (realPort > 0) AdbPortProxy.start(realPort) else AdbPortProxy.stop()
             } else {

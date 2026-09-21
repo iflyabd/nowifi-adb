@@ -60,6 +60,7 @@ object HotspotHelper {
                 for (addr in iface.inetAddresses) {
                     if (addr is Inet4Address && !addr.isLoopbackAddress) {
                         val ip = addr.hostAddress ?: continue
+                        if (ip.startsWith("127.") || ip.startsWith("169.254.")) continue
                         if (iface.name.startsWith("rmnet")) {
                             if (rmnetFallback == null) rmnetFallback = ip
                         } else {
