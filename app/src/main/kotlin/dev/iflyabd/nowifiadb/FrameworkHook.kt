@@ -32,7 +32,9 @@ object FrameworkHook {
     /**
      * "Start on boot" switch: after boot completes, enable wireless debugging the
      * same way as the Settings toggle (only when the bypass is active, i.e. hotspot
-     * up or No-WiFi mode on). Runs on a daemon thread so it never blocks boot.
+     * up or No-WiFi mode on). Re-asserts for a bounded window because late boot
+     * events (adbd restarts, network flips) can revert the toggle back to off.
+     * Runs on a daemon thread so it never blocks boot.
      */
     private fun startOnBootWatcher(lpparam: XC_LoadPackage.LoadPackageParam) {
         try {
@@ -58,16 +60,27 @@ object FrameworkHook {
                             Thread.sleep(3000)
                         }
                         val context = app ?: return@Thread
-                        // Let AdbDebuggingManager finish its boot-time reset first.
-                        Thread.sleep(20000)
-                        if (!HotspotHelper.isOnBootEnabled(context)) return@Thread
-                        if (!HotspotHelper.isBypassActive(context)) {
-                            XposedBridge.log("NoWifiAdb: on-boot skipped (no hotspot / No-WiFi off)")
-                            return@Thread
+                        // Let AdbDebuggingManager finish its boot-time reset first,
+                        // then re-assert for a few minutes: late boot events
+                        // (adbd restarts, network flips) can revert the toggle.
+                        Thread.sleep(30000)
+                        for (attempt in 1..8) {
+                            if (!HotspotHelper.isOnBootEnabled(context)) {
+                                XposedBridge.log("NoWifiAdb: on-boot off, watcher stopping")
+                                return@Thread
+                            }
+                            if (!HotspotHelper.isBypassActive(context)) {
+                                XposedBridge.log("NoWifiAdb: on-boot skipped (no hotspot / No-WiFi off)")
+                                return@Thread
+                            }
+                            if (!HotspotHelper.isAdbWifiEnabled(context)) {
+                                Settings.Global.putInt(context.contentResolver, HotspotHelper.ADB_WIFI_ENABLED, 1)
+                                XposedBridge.log("NoWifiAdb: on-boot enabled wireless debugging (attempt $attempt)")
+                            } else if (attempt == 1) {
+                                XposedBridge.log("NoWifiAdb: on-boot already on")
+                            }
+                            Thread.sleep(30000)
                         }
-                        if (HotspotHelper.isAdbWifiEnabled(context)) return@Thread
-                        Settings.Global.putInt(context.contentResolver, HotspotHelper.ADB_WIFI_ENABLED, 1)
-                        XposedBridge.log("NoWifiAdb: on-boot enabled wireless debugging")
                     } catch (e: Throwable) {
                         XposedBridge.log("NoWifiAdb: on-boot watcher failed: $e")
                     }

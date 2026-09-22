@@ -85,7 +85,8 @@ Notes:
 
 The Wireless Debugging screen also has a **Start on boot** switch. When ON,
 wireless debugging turns itself on after every reboot — but only if the hotspot
-is up or **No-WiFi mode** is on at that moment. Otherwise boot stays clean.
+is up or **No-WiFi mode** is on at that moment, re-asserted for a few minutes
+against late boot events (adbd restarts, network flips). Otherwise boot stays clean.
 
 > Security note: on-boot mode leaves an ADB port listening on all interfaces
 > after every reboot. Anyone on a network the phone joins (hotspot guests,
