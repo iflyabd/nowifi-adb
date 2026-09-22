@@ -14,6 +14,12 @@ object HotspotHelper {
     const val ADB_WIFI_ENABLED = "adb_wifi_enabled"
     const val FIXED_IP = "192.168.49.1"
     const val FIXED_PORT = 5555
+    const val LOOPBACK_IP = "127.0.0.1"
+
+    /** Fixed IP that is actually reachable: the hotspot alias when the hotspot
+     *  is up, otherwise loopback (always connectable on-device, no network). */
+    fun getEffectiveFixedIp(context: Context): String =
+        if (isHotspotActive(context)) FIXED_IP else LOOPBACK_IP
 
     fun isFixedIpEnabled(context: Context): Boolean {
         return Settings.Global.getInt(context.contentResolver, FIXED_IP_KEY, 0) == 1

@@ -130,7 +130,7 @@ object SettingsHook {
                             return
                         }
                         if (HotspotHelper.isFixedIpEnabled(context)) {
-                            param.result = HotspotHelper.FIXED_IP
+                            param.result = HotspotHelper.getEffectiveFixedIp(context)
                             return
                         }
                         val ip = HotspotHelper.getHotspotIpAddress(context) ?: return
@@ -381,7 +381,7 @@ object SettingsHook {
             context,
             HotspotHelper.FIXED_IP_KEY,
             "Fixed IP",
-            "Always use ${HotspotHelper.FIXED_IP}",
+            "Pin a stable IP (hotspot alias, else loopback)",
             HotspotHelper.isFixedIpEnabled(context),
         )?.let { added += it }
         addFixedSwitch(
@@ -653,7 +653,7 @@ object SettingsHook {
         if (!enabled) return ""
         val ip =
             if (HotspotHelper.isFixedIpEnabled(context)) {
-                HotspotHelper.FIXED_IP
+                HotspotHelper.getEffectiveFixedIp(context)
             } else {
                 HotspotHelper.getHotspotIpAddress(context)
                     ?: HotspotHelper.getAnyWlanIp()
